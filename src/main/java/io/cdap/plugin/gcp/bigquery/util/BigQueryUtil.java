@@ -99,7 +99,7 @@ public final class BigQueryUtil {
    * @return {@link Configuration} with config set for BigQuery
    * @throws IOException if not able to get credentials
    */
-  public static Configuration getBigQueryConfig(@Nullable String serviceAccountFilePath, String projectId)
+  public static Configuration getBigQueryConfig(@Nullable String serviceAccountFilePath, String projectId, @Nullable String proxy)
     throws IOException {
     Job job = Job.getInstance();
 
@@ -122,6 +122,9 @@ public final class BigQueryUtil {
     configuration.set("fs.gs.project.id", projectId);
     configuration.set("fs.gs.working.dir", GCSPath.ROOT_DIR);
     configuration.set(BigQueryConfiguration.PROJECT_ID_KEY, projectId);
+    if (proxy != null) {
+      configuration.set("fs.gs.proxy.address", proxy);
+    }
     return configuration;
   }
 

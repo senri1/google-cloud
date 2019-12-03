@@ -17,6 +17,7 @@ package io.cdap.plugin.gcp.bigquery.sink;
 
 import io.cdap.cdap.api.annotation.Description;
 import io.cdap.cdap.api.annotation.Macro;
+import io.cdap.cdap.api.annotation.Name;
 import io.cdap.cdap.etl.api.validation.InvalidConfigPropertyException;
 import io.cdap.plugin.gcp.common.GCPReferenceSinkConfig;
 
@@ -46,8 +47,19 @@ public abstract class AbstractBigQuerySinkConfig extends GCPReferenceSinkConfig 
   @Description("Whether to modify the BigQuery table schema if it differs from the input schema.")
   protected boolean allowSchemaRelaxation;
 
+  @Name("proxy")
+  @Description("The proxy to be used. If none specified it will make a direct connection or through " + 
+  "the proxy set at the environment level.")
+  @Nullable
+  @Macro
+  protected String proxy;
+
   public String getDataset() {
     return dataset;
+  }
+
+  public String getProxy() {
+    return proxy;
   }
 
   @Nullable

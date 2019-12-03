@@ -1,6 +1,10 @@
 *.class
 .*.swp
 .beamer
+*.classpath
+*.factorypath
+*.project
+*.settings/
 # Package Files #
 *.jar
 *.war

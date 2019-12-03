@@ -16,6 +16,7 @@
 package io.cdap.plugin.gcp.bigquery.sink;
 
 import com.google.auth.Credentials;
+import com.google.auth.http.HttpTransportFactory;
 import com.google.cloud.bigquery.BigQuery;
 import com.google.cloud.bigquery.Field;
 import com.google.cloud.bigquery.FieldList;
@@ -34,6 +35,7 @@ import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.cdap.etl.api.batch.BatchSink;
 import io.cdap.cdap.etl.api.batch.BatchSinkContext;
 import io.cdap.plugin.common.LineageRecorder;
+import io.cdap.plugin.common.batch.sink.SinkOutputFormatProvider;
 import io.cdap.plugin.gcp.bigquery.util.BigQueryConstants;
 import io.cdap.plugin.gcp.bigquery.util.BigQueryUtil;
 import io.cdap.plugin.gcp.common.GCPUtils;
@@ -41,13 +43,17 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList; 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -80,15 +86,36 @@ public abstract class AbstractBigQuerySink extends BatchSink<StructuredRecord, J
     prepareRunValidation(context);
 
     AbstractBigQuerySinkConfig config = getConfig();
-    String serviceAccountFilePath = config.getServiceAccountFilePath();
-    Credentials credentials = serviceAccountFilePath == null ?
-      null : GCPUtils.loadServiceAccountCredentials(serviceAccountFilePath);
     String project = config.getProject();
-    BigQuery bigQuery = GCPUtils.getBigQuery(project, credentials);
+    String serviceAccountFilePath = config.getServiceAccountFilePath();
+    String proxy = config.getProxy();
+    Credentials storagecredentials = null;
+    Credentials bigquerycredentials = null;
+    HttpTransportFactory storageTransportFactory = null;
+    HttpTransportFactory bigqueryTransportFactory = null;
+
+    if(proxy != null){
+      storageTransportFactory = GCPUtils.creatHttpTransportFactory(serviceAccountFilePath, proxy);
+      bigqueryTransportFactory = GCPUtils.creatHttpTransportFactory(serviceAccountFilePath, proxy);
+      storagecredentials = serviceAccountFilePath == null ?
+      null : GCPUtils.loadServiceAccountCredentials(serviceAccountFilePath, proxy, storageTransportFactory);
+      bigquerycredentials = serviceAccountFilePath == null ?
+      null : GCPUtils.loadServiceAccountCredentials(serviceAccountFilePath, proxy, bigqueryTransportFactory);
+    }
+    else{
+      storagecredentials = serviceAccountFilePath == null ?
+      null : GCPUtils.loadServiceAccountCredentials(serviceAccountFilePath, proxy, null);
+      bigquerycredentials = serviceAccountFilePath == null ?
+      null : GCPUtils.loadServiceAccountCredentials(serviceAccountFilePath, proxy, null);
+    }
+    
+    
+    BigQuery bigQuery = GCPUtils.getBigQuery(project, bigquerycredentials, proxy, bigqueryTransportFactory);
     baseConfiguration = getBaseConfiguration();
     String bucket = configureBucket();
     if (!context.isPreviewEnabled()) {
-      BigQueryUtil.createResources(bigQuery, GCPUtils.getStorage(project, credentials), config.getDataset(), bucket);
+      BigQueryUtil.createResources(bigQuery, GCPUtils.getStorage(project, storagecredentials, proxy, storageTransportFactory),
+      config.getDataset(), bucket);
     }
 
     prepareRunInternal(context, bigQuery, bucket);
@@ -184,7 +211,8 @@ public abstract class AbstractBigQuerySink extends BatchSink<StructuredRecord, J
    */
   private Configuration getBaseConfiguration() throws IOException {
     Configuration baseConfiguration = BigQueryUtil.getBigQueryConfig(getConfig().getServiceAccountFilePath(),
-                                                                     getConfig().getProject());
+                                                                     getConfig().getProject(),
+                                                                     getConfig().getProxy());
     baseConfiguration.setBoolean(BigQueryConstants.CONFIG_ALLOW_SCHEMA_RELAXATION,
                                  getConfig().isAllowSchemaRelaxation());
     return baseConfiguration;
